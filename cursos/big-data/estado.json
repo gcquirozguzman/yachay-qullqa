@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "clases": {
+    "01": {
+      "archivos": {
+        "Clase01.mp4": "253476839:1791017359669973700",
+        "Clase01.txt": "2fe87af6316ee6df4d532e94bb115389258d7f3f16bf47e8e2fd4979f48306ef"
+      },
+      "etapas": {
+        "texto": {
+          "huella": "cf3e1940e6eb6a77ee427af10a4c99ed2715db2cec9cb7f2b56fb8012455a1a5"
+        }
+      },
+      "materiales": {},
+      "pendiente": "falta ffmpeg y GEMINI_API_KEY"
+    },
+    "02": {
+      "archivos": {
+        "Clase02.mp4": "463465995:1791017394246213100",
+        "Clase02.txt": "de098717c6a384bed1590bbb5057db95b651899dbf881dfd7a27e94876ee753f",
+        "Clase02.vtt": "179fa86738a8254c17e264c38c71f69a057e609fae3fc3c01b71599b9412f7fb"
+      },
+      "etapas": {
+        "texto": {
+          "huella": "178506babc477e08c5c5729adbf17de423d66e3c6f773265f29e28fd48c24e86"
+        }
+      },
+      "materiales": {
+        "0_qy13_tmuNiLaypZW.png": "324ece39eb109f8569a07ab0e262beab84e8c065eba4c05809f993a5a7972e3a",
+        "Formacion grupo seccioon 2.xlsx": "778730c95f98bdd99c700cfa7805e0b056ef5a3008c4f4b40a7af3aec435fbe2",
+        "Links compartidos en Clase - edicion 2026Agosto.docx": "8ac7b360b02c905c865e03c14129c30a3348819c11f6a02b29c77da670a3797e"
+      },
+      "pendiente": "falta ffmpeg y GEMINI_API_KEY"
+    }
+  },
+  "temas": {
+    "catalogo": {},
+    "asignadas": {},
+    "generados": {}
+  }
+}

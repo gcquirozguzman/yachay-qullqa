@@ -1,0 +1,10 @@
+# Datos del curso. La descripcion se usa en los prompts de Gemini.
+nombre = "Big Data"
+descripcion = "Curso de posgrado de Big Data (Escuela de Posgrado UTEC). Las clases trabajan sobre Google Cloud Platform: arquitecturas de datos, servicios de GCP y laboratorios practicos."
+
+[procesamiento]
+modelo = "gemini-3.8-flash"
+duracion_tramo_min = 60
+limite_bytes = 2147483648
+limite_descarga_mb = 500
+desfase_captura_s = 2
