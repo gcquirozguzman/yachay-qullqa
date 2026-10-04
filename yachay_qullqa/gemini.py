@@ -27,12 +27,28 @@ REINTENTOS = 4
 ESPERA_REINTENTO = 90  # segundos, se multiplica por el numero de intento
 
 INSTRUCCIONES_CLAVE = """Falta la variable de entorno GEMINI_API_KEY.
-Crea una clave gratuita en https://aistudio.google.com/apikey y guardala:
+Crea una clave gratuita en https://aistudio.google.com/apikey y pegala en el archivo
+.env de la raiz del repositorio (GEMINI_API_KEY=tu_clave), o guardala como variable:
   Windows (PowerShell, permanente):  setx GEMINI_API_KEY "tu_clave"   (y reabre la terminal)
   Mac / Linux:                       export GEMINI_API_KEY="tu_clave"  (agregalo a ~/.bashrc o ~/.zshrc)"""
 
 
+ARCHIVO_ENV = Path(__file__).resolve().parent.parent / ".env"
+
+
+def _cargar_env() -> None:
+    """Lee GEMINI_API_KEY=... del archivo .env de la raiz (excluido del git).
+    Una variable de entorno ya definida tiene prioridad."""
+    if os.environ.get("GEMINI_API_KEY") or not ARCHIVO_ENV.exists():
+        return
+    for linea in ARCHIVO_ENV.read_text(encoding="utf-8-sig").splitlines():
+        nombre, _, valor = linea.partition("=")
+        if nombre.strip() == "GEMINI_API_KEY" and valor.strip():
+            os.environ["GEMINI_API_KEY"] = valor.strip().strip("\"'")
+
+
 def clave_disponible() -> bool:
+    _cargar_env()
     return bool(os.environ.get("GEMINI_API_KEY"))
 
 
