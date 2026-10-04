@@ -80,3 +80,22 @@ def test_desplazar_y_unir():
     assert [p["tiempo"] for p in u["pasos"]] == ["00:10:00", "01:05:00"]
     assert u["dudas"][0]["tiempo"].startswith("[ILEGIBLE]")
     assert u["titulo"] == "A · B" and "Tramo 2 (desde 01:00:00)" in u["resumen"]
+
+
+def test_indicador(monkeypatch):
+    import io
+    import time
+
+    from yachay_qullqa.progreso import Indicador
+
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    salida = Terminal()
+    monkeypatch.setattr("sys.stdout", salida)
+    with Indicador("Subiendo tramo 1/3"):
+        time.sleep(0.6)
+    texto = salida.getvalue()
+    assert "Subiendo tramo 1/3... 00:00" in texto
+    assert texto.endswith("Subiendo tramo 1/3: listo (00:00)" + " " * 10 + "\n")

@@ -8,6 +8,7 @@ El catalogo de temas vive en estado.json -> "temas".
 import re
 
 from . import gemini, prompts
+from .progreso import Indicador
 from .utiles import escribir_atomico, huella_json, slug
 
 
@@ -46,9 +47,11 @@ def actualizar(ctx, clases) -> None:
         prompt = prompts.ASIGNAR_TEMAS.format(nombre=ctx.curso.nombre, descripcion=ctx.curso.descripcion,
                                               catalogo=texto_catalogo, clase=numero,
                                               apuntes=md.read_text(encoding="utf-8"))
-        respuesta = gemini.con_reintentos(
-            lambda: gemini.extraer_json(gemini.generar(ctx.cliente, ctx.modelo, [gemini.bloque_texto(prompt)])),
-            "asignar temas", ctx.log)
+        def asignar():
+            with Indicador(f"Gemini identifica los temas de la Clase{numero}"):
+                return gemini.extraer_json(gemini.generar(ctx.cliente, ctx.modelo, [gemini.bloque_texto(prompt)]))
+
+        respuesta = gemini.con_reintentos(asignar, "asignar temas", ctx.log)
         for t in respuesta.get("temas", []):
             tema_id = t.get("id")
             if tema_id not in catalogo:
@@ -83,8 +86,11 @@ def actualizar(ctx, clases) -> None:
         prompt = prompts.TEMA.format(nombre=ctx.curso.nombre, descripcion=ctx.curso.descripcion,
                                      tema=t["nombre"], tema_desc=t["descripcion"], reglas=prompts.REGLAS,
                                      apuntes="\n\n".join(partes))
-        md = gemini.con_reintentos(
-            lambda: gemini.generar(ctx.cliente, ctx.modelo, [gemini.bloque_texto(prompt)]), "tema", ctx.log)
+        def escribir_tema():
+            with Indicador(f"Gemini escribe el tema \"{t['nombre']}\""):
+                return gemini.generar(ctx.cliente, ctx.modelo, [gemini.bloque_texto(prompt)])
+
+        md = gemini.con_reintentos(escribir_tema, "tema", ctx.log)
         md = re.sub(r"^```(?:markdown|md)?\s*\n(.*)\n```\s*$", r"\1", md.strip(), flags=re.DOTALL)
         fuentes = ", ".join(f"[Clase{n}](../apuntes/Clase{n}.md)" for n in sorted(t["clases"], key=int))
         escribir_atomico(ruta, f"{md}\n\n---\n_Sintesis generada a partir de: {fuentes}._\n")

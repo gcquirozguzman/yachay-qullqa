@@ -11,6 +11,7 @@ from pathlib import Path
 from . import apuntes, descargas, estado as est, gemini, indice, prompts, temas, texto, video
 from .curso import Curso
 from .inventario import Clase, inventario
+from .progreso import Indicador
 from .utiles import (a_hhmmss, a_segundos, escribir_atomico, escribir_json, huella_json, leer_json,
                      sha256_archivo, sha256_texto)
 
@@ -133,7 +134,8 @@ def etapa_video(ctx: Contexto, clase: Clase) -> dict | None:
             tramos = [{"archivo": str(clase.video), "inicio": 0.0, "fin": dur}]
         else:
             ctx.log(f"  video: {a_hhmmss(dur)}; se divide en tramos de hasta {a_hhmmss(seg)}")
-            tramos = video.dividir(clase.video, trabajo / "partes", seg)
+            with Indicador("Dividiendo el video"):
+                tramos = video.dividir(clase.video, trabajo / "partes", seg)
         plan = {"huella": h, "duracion": dur, "tramos": tramos}
         escribir_json(plan_ruta, plan)
 
@@ -163,8 +165,9 @@ def _procesar_tramo(ctx: Contexto, clase: Clase, trabajo: Path, i: int, total: i
 
     archivo = gemini.archivo_activo(cliente, pendiente["archivo"]) if pendiente.get("archivo") else None
     if archivo is None:
-        ctx.log(f"    subiendo {Path(tramo['archivo']).name}...")
-        archivo = gemini.subir_video(cliente, Path(tramo["archivo"]))
+        ruta = Path(tramo["archivo"])
+        with Indicador(f"Subiendo tramo {i + 1}/{total} a Gemini ({ruta.stat().st_size / 1024**2:.0f} MB)"):
+            archivo = gemini.subir_video(cliente, ruta)
         pendiente = {"archivo": archivo.name}
         escribir_json(pendiente_ruta, pendiente)
 
@@ -178,7 +181,8 @@ def _procesar_tramo(ctx: Contexto, clase: Clase, trabajo: Path, i: int, total: i
         pendiente["interaccion"] = id_interaccion
         escribir_json(pendiente_ruta, pendiente)
 
-    respuesta = gemini.generar(cliente, ctx.modelo, entrada, pendiente.get("interaccion"), al_crear)
+    with Indicador(f"Gemini esta analizando el tramo {i + 1}/{total}"):
+        respuesta = gemini.generar(cliente, ctx.modelo, entrada, pendiente.get("interaccion"), al_crear)
     escribir_atomico(trabajo / f"tramo_{i:02d}.respuesta.txt", respuesta)
     try:
         notas = gemini.extraer_json(respuesta)
@@ -251,9 +255,11 @@ def _verificar(ctx: Contexto, clase: Clase, pasos: list[dict], carpeta: Path) ->
         entrada = [gemini.bloque_texto(prompts.VERIFICAR.format(reglas=prompts.REGLAS, pasos=lista))]
         for n, i in enumerate(lote, 1):
             entrada += [gemini.bloque_texto(f"Captura del paso {n}:"), gemini.bloque_imagen(carpeta / pasos[i]["captura"])]
-        ctx.log(f"  verificando capturas {inicio + 1}-{inicio + len(lote)} de {len(por_verificar)}")
-        respuesta = gemini.con_reintentos(
-            lambda: gemini.extraer_json(gemini.generar(ctx.cliente, ctx.modelo, entrada)), "verificacion", ctx.log)
+        def pedir():
+            with Indicador(f"Gemini revisa las capturas {inicio + 1}-{inicio + len(lote)} de {len(por_verificar)}"):
+                return gemini.extraer_json(gemini.generar(ctx.cliente, ctx.modelo, entrada))
+
+        respuesta = gemini.con_reintentos(pedir, "verificacion", ctx.log)
         for r in respuesta.get("resultados", []):
             n = int(r.get("indice", 0))
             if 1 <= n <= len(lote):
@@ -328,8 +334,8 @@ def etapa_apuntes(ctx: Contexto, clase: Clase, notas: dict, datos_texto: dict, h
 
 # ---------------------------------------------------------------- curso completo
 
-def procesar_clase(ctx: Contexto, clase: Clase, reintentar_descargas: bool) -> None:
-    ctx.log(f"\n== {clase.nombre}")
+def procesar_clase(ctx: Contexto, clase: Clase, reintentar_descargas: bool, etiqueta: str = "") -> None:
+    ctx.log(f"\n== {etiqueta}{clase.nombre}")
     c = est.clase(ctx.estado, clase.numero)
     c["archivos"] = {p.name: est.huella_archivo(p) for p in clase.archivos()}
     c["materiales"] = est.huellas_carpeta(ctx.curso.materiales / clase.nombre)
@@ -377,9 +383,9 @@ def procesar(curso: Curso, numero: str | None = None, reintentar_descargas: bool
         clases_a_procesar = clases
 
     errores = []
-    for clase in clases_a_procesar:
+    for k, clase in enumerate(clases_a_procesar, 1):
         try:
-            procesar_clase(ctx, clase, reintentar_descargas)
+            procesar_clase(ctx, clase, reintentar_descargas, f"[{k}/{len(clases_a_procesar)}] ")
         except KeyboardInterrupt:
             ctx.guardar()
             log("\nInterrumpido. Vuelve a ejecutar el mismo comando para continuar donde quedo.")
