@@ -10,8 +10,10 @@ RE_NOMBRE_CURSO = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 CONFIG_DEFECTO = {
     "modelo": "gemini-3.8-flash",
-    # Tramos por duracion: una clase de 3 h no entra en el contexto del modelo.
-    "duracion_tramo_min": 60,
+    # Tramos por duracion; 0 = no dividir por duracion. Con processing "agentic"
+    # Gemini recorre el video completo (hasta ~3 h caben en una peticion), asi que
+    # solo se divide si el archivo supera limite_bytes.
+    "duracion_tramo_min": 0,
     # Tope por archivo del nivel gratuito de la API de archivos de Gemini.
     "limite_bytes": 2 * 1024**3,
     # Tope de descarga por enlace, para no bajar por error algo enorme.

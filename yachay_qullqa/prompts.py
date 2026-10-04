@@ -1,7 +1,7 @@
 """Prompts para Gemini. Si cambias un prompt, sube VERSION: las clases ya
 procesadas se marcaran como desactualizadas y se volveran a generar."""
 
-VERSION = "1"
+VERSION = "2"
 
 REGLAS = """REGLAS:
 - Responde en espanol.
@@ -56,8 +56,16 @@ Responde SOLO con un objeto JSON con esta forma:
 "pasos" debe contener CADA paso de configuracion, uno por accion visible, en orden,
 de forma que se pueda reproducir."""
 
-TRAMO = """Este video es el tramo {n} de {total} de la clase (empieza en el minuto
-{inicio} de la grabacion completa). Procesa solo lo que hay en este tramo."""
+TRAMO = """Este video es el tramo {n} de {total} de la clase (empieza en el {inicio}
+de la grabacion completa). La clase se dividio solo por su tamano."""
+
+TRAMO_SOLAPE = """Los primeros minutos de este video, hasta el {desde} (tiempo de este video),
+repiten el final del tramo anterior. Usalos solo para entender el contexto: tus
+apuntes deben empezar en el {desde}.
+
+LO QUE SE VIO EN EL TRAMO ANTERIOR (para que no pierdas el hilo; no lo repitas):
+{resumen}
+Ultimo subtema que se estaba tratando: {ultimo}"""
 
 APOYO_VTT = """TRANSCRIPCION AUTOMATICA DE ZOOM (apoyo): la tienes abajo. Tiene muchos errores
 de reconocimiento. Usala solo para escribir bien nombres propios y terminos

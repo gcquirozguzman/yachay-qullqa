@@ -47,21 +47,52 @@ def segundos_por_tramo(tam_bytes: int, dur_s: float, tramo_min: int, limite_byte
     return math.ceil(dur_s / n)
 
 
-def dividir(video: Path, carpeta: Path, seg_tramo: float) -> list[dict]:
-    """Divide sin recodificar. Devuelve [{archivo, inicio, fin}] con los tiempos
-    reales de cada tramo (los da ffmpeg en la lista de segmentos)."""
-    carpeta.mkdir(parents=True, exist_ok=True)
-    lista = carpeta / "tramos.csv"
+def dividir(video: Path, carpeta: Path, seg_tramo: float, solape: int = 120) -> list[dict]:
+    """Divide sin recodificar en tramos que se solapan unos `solape` segundos, para
+    no perder el hilo en el corte. Devuelve [{archivo, inicio, fin, desde}]:
+    `desde` es donde empieza lo nuevo del tramo (antes de eso, repite el anterior).
+
+    Primero corta piezas cortas (ffmpeg da sus tiempos exactos) y luego arma cada
+    tramo uniendo piezas, asi los tiempos siguen siendo exactos."""
+    piezas_dir = carpeta / "piezas"
+    piezas_dir.mkdir(parents=True, exist_ok=True)
+    lista = piezas_dir / "piezas.csv"
     _ejecutar(["ffmpeg", "-y", "-v", "error", "-i", str(video), "-map", "0", "-c", "copy",
-               "-f", "segment", "-segment_time", str(int(seg_tramo)), "-reset_timestamps", "1",
+               "-f", "segment", "-segment_time", str(max(30, solape)), "-reset_timestamps", "1",
                "-segment_list", str(lista), "-segment_list_type", "csv",
-               str(carpeta / f"tramo_%02d{video.suffix}")])
-    tramos = []
+               str(piezas_dir / f"pieza_%04d{video.suffix}")])
     with open(lista, encoding="utf-8") as f:
-        for fila in csv.reader(f):
-            if len(fila) >= 3:
-                tramos.append({"archivo": str(carpeta / fila[0]), "inicio": float(fila[1]), "fin": float(fila[2])})
+        piezas = [(piezas_dir / fila[0], float(fila[1]), float(fila[2])) for fila in csv.reader(f) if len(fila) >= 3]
+
+    tramos = []
+    for indices in agrupar_piezas([(p[1], p[2]) for p in piezas], seg_tramo):
+        j_ini, j_desde, j_fin = indices
+        destino = carpeta / f"tramo_{len(tramos):02d}{video.suffix}"
+        concat = carpeta / f"tramo_{len(tramos):02d}.txt"
+        concat.write_text("".join(f"file '{piezas[j][0].as_posix()}'\n" for j in range(j_ini, j_fin + 1)),
+                          encoding="utf-8")
+        _ejecutar(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(concat),
+                   "-c", "copy", str(destino)])
+        concat.unlink()
+        tramos.append({"archivo": str(destino), "inicio": piezas[j_ini][1],
+                       "fin": piezas[j_fin][2], "desde": piezas[j_desde][1]})
+    shutil.rmtree(piezas_dir, ignore_errors=True)
     return tramos
+
+
+def agrupar_piezas(piezas: list[tuple[float, float]], seg_tramo: float) -> list[tuple[int, int, int]]:
+    """Para cada tramo: (primera pieza, pieza donde empieza lo nuevo, ultima pieza).
+    Cada tramo, salvo el primero, empieza una pieza antes: ese es el solape."""
+    grupos = []
+    j_desde = 0
+    while j_desde < len(piezas):
+        limite = piezas[j_desde][0] + seg_tramo
+        j_fin = j_desde
+        while j_fin + 1 < len(piezas) and piezas[j_fin + 1][0] < limite:
+            j_fin += 1
+        grupos.append((max(0, j_desde - 1) if grupos else 0, j_desde, j_fin))
+        j_desde = j_fin + 1
+    return grupos
 
 
 def captura(video: Path, segundo: float, destino: Path) -> None:

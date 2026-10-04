@@ -28,6 +28,16 @@ def desplazar(notas: dict, segundos: float) -> dict:
     return salida
 
 
+def recortar_antes_de(notas: dict, segundos: float, tolerancia: int = 5) -> dict:
+    """Quita lo anterior a `segundos` (tiempos ya absolutos): es el solape con el
+    tramo previo. Lo que tiene la hora [ILEGIBLE] se conserva."""
+    salida = dict(notas)
+    for clave in LISTAS:
+        salida[clave] = [item for item in notas.get(clave) or []
+                         if (s := _seg(item.get("tiempo"))) is None or s >= segundos - tolerancia]
+    return salida
+
+
 def unir(tramos: list[dict]) -> dict:
     """tramos: [{'inicio': s, 'notas': {...}}] con tiempos ya desplazados."""
     if len(tramos) == 1:

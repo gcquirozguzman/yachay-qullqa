@@ -145,9 +145,13 @@ def etapa_video(ctx: Contexto, clase: Clase) -> dict | None:
         if salida.exists():
             continue
         ctx.log(f"  video: tramo {i + 1}/{total} ({a_hhmmss(tramo['inicio'])} - {a_hhmmss(tramo['fin'])})")
-        notas = gemini.con_reintentos(lambda: _procesar_tramo(ctx, clase, trabajo, i, total, tramo),
+        previo = leer_json(trabajo / f"tramo_{i - 1:02d}.json")["notas"] if i else None
+        notas = gemini.con_reintentos(lambda: _procesar_tramo(ctx, clase, trabajo, i, total, tramo, previo),
                                       f"tramo {i + 1}", ctx.log)
-        escribir_json(salida, {"inicio": tramo["inicio"], "notas": apuntes.desplazar(notas, tramo["inicio"])})
+        notas = apuntes.desplazar(notas, tramo["inicio"])
+        # Lo anterior a "desde" es el solape con el tramo previo: ya esta en sus apuntes.
+        notas = apuntes.recortar_antes_de(notas, tramo.get("desde", tramo["inicio"]))
+        escribir_json(salida, {"inicio": tramo.get("desde", tramo["inicio"]), "notas": notas})
 
     unidas = apuntes.unir([leer_json(trabajo / f"tramo_{i:02d}.json") for i in range(total)])
     unidas["duracion"] = a_hhmmss(plan["duracion"])
@@ -158,7 +162,21 @@ def etapa_video(ctx: Contexto, clase: Clase) -> dict | None:
     return unidas
 
 
-def _procesar_tramo(ctx: Contexto, clase: Clase, trabajo: Path, i: int, total: int, tramo: dict) -> dict:
+def _texto_tramo(i: int, total: int, tramo: dict, previo: dict | None) -> str:
+    if total == 1:
+        return ""
+    texto = prompts.TRAMO.format(n=i + 1, total=total, inicio=a_hhmmss(tramo["inicio"]))
+    if previo:
+        desde = tramo.get("desde", tramo["inicio"]) - tramo["inicio"]
+        desarrollo = previo.get("desarrollo") or []
+        texto += "\n\n" + prompts.TRAMO_SOLAPE.format(
+            desde=a_hhmmss(desde), resumen=(previo.get("resumen") or "[sin resumen]").strip(),
+            ultimo=desarrollo[-1].get("titulo", "") if desarrollo else "[no indicado]")
+    return texto
+
+
+def _procesar_tramo(ctx: Contexto, clase: Clase, trabajo: Path, i: int, total: int, tramo: dict,
+                    previo: dict | None) -> dict:
     cliente = ctx.cliente
     pendiente_ruta = trabajo / f"tramo_{i:02d}.pendiente.json"
     pendiente = leer_json(pendiente_ruta, {})
@@ -172,9 +190,9 @@ def _procesar_tramo(ctx: Contexto, clase: Clase, trabajo: Path, i: int, total: i
         escribir_json(pendiente_ruta, pendiente)
 
     explicacion, bloques = _apoyos(clase, tramo["inicio"], tramo["fin"])
-    texto_tramo = prompts.TRAMO.format(n=i + 1, total=total, inicio=a_hhmmss(tramo["inicio"])) if total > 1 else ""
     prompt = prompts.APUNTES.format(nombre=ctx.curso.nombre, descripcion=ctx.curso.descripcion,
-                                    tramo=texto_tramo, apoyos=explicacion, reglas=prompts.REGLAS)
+                                    tramo=_texto_tramo(i, total, tramo, previo), apoyos=explicacion,
+                                    reglas=prompts.REGLAS)
     entrada = [gemini.bloque_video(archivo), gemini.bloque_texto(prompt), *bloques]
 
     def al_crear(id_interaccion):

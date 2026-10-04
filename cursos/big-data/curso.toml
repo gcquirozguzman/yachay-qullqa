@@ -4,7 +4,7 @@ descripcion = "Curso de posgrado de Big Data (Escuela de Posgrado UTEC). Las cla
 
 [procesamiento]
 modelo = "gemini-3.8-flash"
-duracion_tramo_min = 60
+duracion_tramo_min = 0
 limite_bytes = 2147483648
 limite_descarga_mb = 500
 desfase_captura_s = 2

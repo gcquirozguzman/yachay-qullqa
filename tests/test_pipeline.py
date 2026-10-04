@@ -15,6 +15,7 @@ class GeminiFalso:
         self.llamadas = []  # (tipo, detalle)
         self.subidas = []
         self.fallar_en_tramo = None
+        self.prompts_video = []
         self._resp = {}
         self.files = SimpleNamespace(upload=self._subir, get=self._get_archivo, delete=lambda name: None)
         self.interactions = SimpleNamespace(create=self._crear, get=self._get)
@@ -34,6 +35,7 @@ class GeminiFalso:
             if self.fallar_en_tramo and self.fallar_en_tramo in tramo:
                 raise RuntimeError("corte simulado")
             self.llamadas.append(("video", tramo))
+            self.prompts_video.append(textos)
             con_vtt = "TRANSCRIPCION AUTOMATICA" in textos
             salida = json.dumps({
                 "titulo": f"Tema de {tramo}", "resumen": "Resumen con vtt." if con_vtt else "Resumen.",
@@ -80,15 +82,16 @@ def entorno(tmp_path, monkeypatch):
     monkeypatch.setattr(gemini, "ESPERA_REINTENTO", 0)
     monkeypatch.setattr(gemini, "REINTENTOS", 1)
     monkeypatch.setattr(video, "ffmpeg_disponible", lambda: True)
-    monkeypatch.setattr(video, "duracion", lambda v: 7000.0)  # 1 h 56 min -> 2 tramos
+    monkeypatch.setattr(video, "duracion", lambda v: 7000.0)  # 1 h 56 min -> 2 tramos de 60 min
 
     def dividir(v, carpeta, seg):
         carpeta.mkdir(parents=True, exist_ok=True)
         tramos = []
-        for i, ini in enumerate((0.0, 3500.0)):
+        # El tramo 2 empieza en 3400 s, pero lo nuevo empieza en 3500 s (100 s de solape).
+        for i, (ini, desde) in enumerate(((0.0, 0.0), (3400.0, 3500.0))):
             p = carpeta / f"{v.stem}_tramo_{i:02d}.mp4"
             p.write_bytes(b"x")
-            tramos.append({"archivo": str(p), "inicio": ini, "fin": ini + 3500})
+            tramos.append({"archivo": str(p), "inicio": ini, "fin": desde + 3500, "desde": desde})
         return tramos
 
     monkeypatch.setattr(video, "dividir", dividir)
@@ -99,6 +102,7 @@ def entorno(tmp_path, monkeypatch):
         "estado": descargas.REFERENCIA, "archivo": None, "detalle": ""})
 
     curso = Curso.crear("prueba", "Prueba", "Curso de prueba", raiz=tmp_path)
+    curso.config["duracion_tramo_min"] = 60
     (curso.clases / "Clase01.mp4").write_bytes(b"video1")
     (curso.clases / "Clase01.txt").write_text("00:10:00\tDocente:\thttps://ejemplo.org\n", encoding="utf-8")
     (curso.clases / "Clase02.mp4").write_bytes(b"video2")
@@ -116,11 +120,16 @@ def test_flujo_completo_e_incremental(entorno):
     assert falso.tipos().count("tema") == 1
 
     md = (curso.apuntes / "Clase01.md").read_text(encoding="utf-8")
-    assert "### [00:59:20] Inicio" in md  # 00:01:00 del tramo 2 + 3500 s
+    # 00:01:00 del tramo 2 = 3460 s: cae en el solape (antes de 3500 s) y se descarta.
+    assert md.count("] Inicio") == 1 and "### [00:01:00] Inicio" in md
+    assert "**[00:58:40]**" in md  # codigo 00:02:00 del tramo 2 + 3400 s
+    assert "LO QUE SE VIO EN EL TRAMO ANTERIOR" in falso.prompts_video[1]
+    assert "Resumen." in falso.prompts_video[1] and "hasta el 00:01:40" in falso.prompts_video[1]
+    assert "TRAMO ANTERIOR" not in falso.prompts_video[0]
     assert "gcloud init" in md
     assert "![Paso 2 (00:04:00)](../capturas/Clase01/paso-02_00-04-00.jpg)" in md
     assert "Corregido segun la captura" in md and "Crear bucket (boton CREAR)" in md
-    assert (curso.capturas / "Clase01" / "paso-04_01-02-20.jpg").exists()
+    assert (curso.capturas / "Clase01" / "paso-04_01-00-40.jpg").exists()
     assert (curso.temas / "01-configuracion-gcp.md").exists()
     indice = curso.indice.read_text(encoding="utf-8")
     assert "[Configuracion GCP](temas/01-configuracion-gcp.md)" in indice

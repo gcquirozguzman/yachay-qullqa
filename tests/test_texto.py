@@ -66,10 +66,22 @@ def test_plan_descargas():
 
 def test_tramos():
     assert video.segundos_por_tramo(700 * 1024**2, 50 * 60, 60, 2 * 1024**3) is None
+    assert video.segundos_por_tramo(700 * 1024**2, 3 * 3600, 0, 2 * 1024**3) is None  # 0 = no dividir
     assert video.segundos_por_tramo(700 * 1024**2, 3 * 3600 + 20, 60, 2 * 1024**3) == 2705  # 4 tramos parejos
     # Pesa 5 GB y dura 40 min: se divide por tamano aunque no supere la duracion.
     seg = video.segundos_por_tramo(5 * 1024**3, 2400, 60, 2 * 1024**3)
     assert seg is not None and seg < 2400 * 0.4
+
+
+def test_agrupar_piezas_con_solape():
+    piezas = [(i * 120.0, (i + 1) * 120.0) for i in range(10)]  # 20 min en piezas de 2 min
+    assert video.agrupar_piezas(piezas, 480) == [(0, 0, 3), (3, 4, 7), (7, 8, 9)]
+
+
+def test_recortar_solape():
+    from yachay_qullqa.apuntes import recortar_antes_de
+    notas = {"pasos": [{"tiempo": "00:00:50"}, {"tiempo": "00:01:58"}, {"tiempo": "00:03:00"}, {"tiempo": "[ILEGIBLE] x"}]}
+    assert [p["tiempo"] for p in recortar_antes_de(notas, 120)["pasos"]] == ["00:01:58", "00:03:00", "[ILEGIBLE] x"]
 
 
 def test_desplazar_y_unir():
