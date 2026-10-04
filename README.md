@@ -72,18 +72,25 @@ Ese archivo es privado: no se sube a ningún repositorio.
 
 ## Uso
 
-1. **Crea el curso** (una vez):
-   `.venv\Scripts\python -m yachay_qullqa crear big-data --nombre "Big Data"`
-2. **Copia las grabaciones** a `cursos/big-data/clases/`.
-3. **Procesa**:
-   `.venv\Scripts\python -m yachay_qullqa procesar big-data`
-   (agrega `--clase 01` para procesar solo una clase).
-4. **Revisa qué falta** en cualquier momento:
-   `.venv\Scripts\python -m yachay_qullqa estado big-data`
+Todo se hace con un solo comando, desde la carpeta del proyecto:
 
-En Mac o Linux, cambia `.venv\Scripts\python` por `.venv/bin/python`.
+```
+.\qullqa
+```
 
-Después, abre `cursos/big-data/INDICE.md` y empieza por ahí.
+(en Mac o Linux: `./qullqa`)
+
+Revisa todos los cursos de la carpeta `cursos/`, te muestra qué hay nuevo o qué
+falta en cada uno y, si confirmas, procesa solo eso.
+
+- **Para agregar un curso**: crea una carpeta en `cursos/` (por ejemplo
+  `cursos/estadistica`) y ejecuta `.\qullqa`. Se crea el archivo `curso.toml`,
+  donde escribes el nombre y la descripción del curso, y la carpeta `clases/`,
+  donde pones las grabaciones. Luego vuelve a ejecutar `.\qullqa`.
+- **Para agregar clases**: copia los archivos a `cursos/<curso>/clases/` y
+  ejecuta `.\qullqa`.
+
+Después, abre `cursos/<curso>/INDICE.md` y empieza por ahí.
 
 ## Si agregas algo después
 
