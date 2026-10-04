@@ -80,8 +80,9 @@ Todo se hace con un solo comando, desde la carpeta del proyecto:
 
 (en Mac o Linux: `./qullqa`)
 
-Revisa todos los cursos de la carpeta `cursos/`, te muestra qué hay nuevo o qué
-falta en cada uno y, si confirmas, procesa solo eso.
+Te muestra la lista de cursos de la carpeta `cursos/`. Escribes el número de
+uno y ves qué clases son nuevas o qué les falta; si confirmas con `s`, se
+procesa solo lo nuevo de ese curso. Con Enter sales sin hacer nada.
 
 - **Para agregar un curso**: crea una carpeta en `cursos/` (por ejemplo
   `cursos/estadistica`) y ejecuta `.\qullqa`. Se crea el archivo `curso.toml`,

@@ -1,6 +1,6 @@
 """Linea de comandos.
 
-  python -m yachay_qullqa [--si]    revisa todos los cursos y procesa lo nuevo
+  python -m yachay_qullqa           lista los cursos; al elegir uno, muestra su estado y procesa
   python -m yachay_qullqa crear <curso> --nombre "..." --descripcion "..."
   python -m yachay_qullqa procesar <curso> [--clase 01] [--reintentar-descargas]
   python -m yachay_qullqa estado <curso>
@@ -30,81 +30,81 @@ def revisar_clase(curso: Curso, estado: dict, c) -> str:
     return ""
 
 
+def _revisar_curso(carpeta) -> tuple[Curso | None, list[str]]:
+    """Devuelve el curso (o None si no hay nada que procesar) y las lineas de detalle."""
+    if not (carpeta / "curso.toml").exists():
+        if not RE_NOMBRE_CURSO.match(carpeta.name):
+            return None, ["Nombre de carpeta no valido (usa minusculas, numeros y guiones)."]
+        Curso.crear(carpeta.name, carpeta.name, "")
+        return None, ["CURSO NUEVO: se creo curso.toml y sus carpetas.",
+                      "Escribe el nombre y la descripcion en curso.toml, pon los videos en clases/"
+                      " y vuelve a ejecutar."]
+    curso = Curso.abrir(carpeta.name)
+    if not curso.descripcion.strip():
+        return None, ["Falta la descripcion en curso.toml (Gemini la necesita)."]
+    estado = est.cargar(curso)
+    clases, desconocidos = inventario(curso)
+    detalle, pendientes = [], 0
+    for c in clases:
+        motivo = revisar_clase(curso, estado, c)
+        faltan = f" (falta {', '.join(c.faltantes())})" if c.faltantes() else ""
+        pendientes += bool(motivo)
+        detalle.append(f"{c.nombre}: {motivo or 'al dia'}{faltan}")
+    for numero in sorted(set(estado["clases"]) - {c.numero for c in clases}, key=int):
+        detalle.append(f"Clase{numero}: ya no esta en clases/")
+        pendientes += 1
+    detalle += [f"No reconocido: {p.name} (se esperan nombres como Clase01.mp4)" for p in desconocidos]
+    resumen = f"{len(clases)} clases, " + (f"{pendientes} por procesar." if pendientes else "todo al dia.")
+    return (curso if pendientes else None), detalle + [resumen]
+
+
+def _preguntar(texto: str) -> str:
+    try:
+        return input(texto).replace("﻿", "").strip().lower()
+    except EOFError:
+        return ""
+
+
 def cmd_todo(a) -> int:
-    """Revisa todos los cursos de cursos/ y procesa solo lo nuevo, cambiado o incompleto."""
+    """Lista los cursos; al elegir uno muestra su estado y, si confirmas, procesa lo nuevo."""
     carpetas = []
     if RAIZ_CURSOS.exists():
         carpetas = sorted(d for d in RAIZ_CURSOS.iterdir() if d.is_dir() and not d.name.startswith("."))
     if not carpetas:
-        print(f"No hay cursos en {RAIZ_CURSOS}. Crea una carpeta por curso, con sus videos en <curso>/clases/.")
+        print(f"No hay cursos en {RAIZ_CURSOS}.")
         return 0
 
-    por_procesar = []
-    for carpeta in carpetas:
-        print()
-        if not (carpeta / "curso.toml").exists():
-            if not RE_NOMBRE_CURSO.match(carpeta.name):
-                print(f"{carpeta.name}: nombre no valido (usa minusculas, numeros y guiones). Se omite.")
-                continue
-            Curso.crear(carpeta.name, carpeta.name, "")
-            print(f"{carpeta.name}: CURSO NUEVO. Cree {carpeta.name}/curso.toml y sus carpetas.")
-            print(f"  Escribe ahi el nombre y la descripcion del curso, pon los videos en {carpeta.name}/clases/"
-                  " y vuelve a ejecutar.")
-            continue
-        curso = Curso.abrir(carpeta.name)
-        estado = est.cargar(curso)
-        clases, desconocidos = inventario(curso)
-        print(f"{carpeta.name} ({curso.nombre}): {len(clases)} clases")
-        if not curso.descripcion.strip():
-            print("  Falta la descripcion en curso.toml (Gemini la necesita). Se omite hasta que la escribas.")
-            continue
-        motivos = {}
-        for c in clases:
-            motivo = revisar_clase(curso, estado, c)
-            faltan = f" (falta {', '.join(c.faltantes())})" if c.faltantes() else ""
-            if motivo:
-                motivos[c.nombre] = motivo
-            if motivo or faltan:
-                print(f"  {c.nombre}: {motivo or 'al dia'}{faltan}")
-        for numero in sorted(set(estado["clases"]) - {c.numero for c in clases}, key=int):
-            print(f"  Clase{numero}: ya no esta en clases/ (se quitara de temas e indice)")
-            motivos[f"Clase{numero}"] = "eliminada"
-        for p in desconocidos:
-            print(f"  no reconocido: {p.name} (se esperan nombres como Clase01.mp4)")
-        if motivos:
-            por_procesar.append((curso, motivos))
-        else:
-            print("  Todo al dia.")
-
-    print()
-    if not por_procesar:
-        print("No hay nada nuevo que procesar.")
+    print("Cursos:")
+    for n, carpeta in enumerate(carpetas, 1):
+        print(f"  {n}. {carpeta.name}")
+    eleccion = _preguntar("\nNumero del curso (Enter para salir): ")
+    if not eleccion:
         return 0
+    if not eleccion.isdigit() or not 1 <= int(eleccion) <= len(carpetas):
+        print("Ese numero no existe.")
+        return 1
+
+    carpeta = carpetas[int(eleccion) - 1]
+    curso, detalle = _revisar_curso(carpeta)
+    print(f"\n{carpeta.name}:")
+    for linea in detalle:
+        print(f"  {linea}")
+    if not curso:
+        return 0
+
     faltan = []
     if not video.ffmpeg_disponible():
         faltan.append(video.INSTRUCCIONES_FFMPEG)
     if not gemini.clave_disponible():
         faltan.append(gemini.INSTRUCCIONES_CLAVE)
     if faltan:
-        print("No se puede procesar todavia:")
+        print("\nNo se puede procesar todavia:")
         print("\n\n".join(faltan))
         return 1
-
-    total = sum(len(m) for _, m in por_procesar)
-    print(f"Por procesar: {total} clases en {len(por_procesar)} cursos. Los videos se envian a Gemini.")
-    if not a.si:
-        try:
-            respuesta = input("Procesar ahora? [s/N]: ").strip().lower()
-        except EOFError:
-            respuesta = ""
-        if respuesta not in ("s", "si", "sí", "y", "yes"):
-            print("No se proceso nada.")
-            return 0
-    codigo = 0
-    for curso, _ in por_procesar:
-        print(f"\n######## {curso.id}")
-        codigo |= procesar(curso)
-    return codigo
+    if _preguntar("\nProcesar lo pendiente? Los videos se envian a Gemini. [s/N]: ") not in ("s", "si", "sí"):
+        print("No se proceso nada.")
+        return 0
+    return procesar(curso)
 
 
 def cmd_crear(a) -> int:
@@ -151,7 +151,6 @@ def main(argv=None) -> None:
         except AttributeError:
             pass
     p = argparse.ArgumentParser(prog="yachay_qullqa", description="Apuntes de clases de Zoom, por curso.")
-    p.add_argument("--si", action="store_true", help="sin comando: procesa sin pedir confirmacion")
     p.set_defaults(f=cmd_todo)
     sub = p.add_subparsers(dest="comando")
 
